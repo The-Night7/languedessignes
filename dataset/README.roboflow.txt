@@ -1,8 +1,8 @@
 
-American sign language letters - v6 2024-03-23 3:56pm
+Sign Language Detection - v1 2024-06-24 7:30pm
 ==============================
 
-This dataset was exported via roboflow.com on March 23, 2024 at 10:34 AM GMT
+This dataset was exported via roboflow.com on June 24, 2024 at 7:33 PM GMT
 
 Roboflow is an end-to-end computer vision platform that helps you
 * collaborate with your team on computer vision projects
@@ -17,13 +17,14 @@ visit https://github.com/roboflow/notebooks
 
 To find over 100k other datasets and pre-trained models, visit https://universe.roboflow.com
 
-The dataset includes 1502 images.
-ASL are annotated in YOLOv8 format.
+The dataset includes 498 images.
+BISINDO-sign-language are annotated in YOLOv8 format.
 
 The following pre-processing was applied to each image:
 * Auto-orientation of pixel data (with EXIF-orientation stripping)
 * Resize to 640x640 (Stretch)
 
-No image augmentation techniques were applied.
+The following augmentation was applied to create 3 versions of each source image:
+* 50% probability of horizontal flip
 
 

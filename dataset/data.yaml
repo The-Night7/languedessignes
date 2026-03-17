@@ -2,12 +2,12 @@ train: ../train/images
 val: ../valid/images
 test: ../test/images
 
-nc: 26
-names: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+nc: 11
+names: ['A', 'B', 'D', 'E', 'Hello', 'I', 'IloveYou', 'L', 'N', 'Nama', 'No']
 
 roboflow:
-  workspace: sign-language-oyykt
-  project: american-sign-language-letters-gxpdm
-  version: 6
-  license: Public Domain
-  url: https://universe.roboflow.com/sign-language-oyykt/american-sign-language-letters-gxpdm/dataset/6
+  workspace: muhammad-anbiya
+  project: sign-language-detection-vtkek
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/muhammad-anbiya/sign-language-detection-vtkek/dataset/1
