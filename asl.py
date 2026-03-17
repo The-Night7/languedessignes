@@ -1,16 +1,13 @@
 import cv2
 import numpy as np
 import time
-from collections import deque
-from statistics import mode, StatisticsError
 from ultralytics import YOLO
 import mediapipe as mp
 
 # --- 1. CHARGEMENT DES DEUX IA ---
-# YOLO (L'Intelligence qui traduit la lettre)
-model = YOLO('best.pt')
+print("Chargement des cerveaux virtuels...")
+model_yolo = YOLO('best.pt')
 
-# MediaPipe (Le traceur qui dessine l'anatomie)
 model_path = 'hand_landmarker.task'
 BaseOptions = mp.tasks.BaseOptions
 HandLandmarker = mp.tasks.vision.HandLandmarker
@@ -20,10 +17,9 @@ VisionRunningMode = mp.tasks.vision.RunningMode
 options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path=model_path),
     running_mode=VisionRunningMode.VIDEO,
-    num_hands=2)
+    num_hands=1) # On se concentre sur une seule main pour l'instant
 
-# --- 2. CONFIGURATION VISUELLE ET MÉMOIRE ---
-# Dictionnaire des os de la main pour MediaPipe
+# --- 2. CONFIGURATION VISUELLE ---
 connexions = [
     (0,1), (1,2), (2,3), (3,4),       # Pouce
     (0,5), (5,6), (6,7), (7,8),       # Index
@@ -32,92 +28,98 @@ connexions = [
     (13,17), (0,17), (17,18), (18,19), (19,20) # Auriculaire
 ]
 
-historique_lettres = deque(maxlen=5)
-lettre_stable = "..."
-
 cap = cv2.VideoCapture(0)
 print("Appuyez sur 'q' pour quitter l'application.")
 
-# --- 3. BOUCLE PRINCIPALE ---
+# --- 3. LA BOUCLE DE TRAVAIL D'ÉQUIPE ---
 with HandLandmarker.create_from_options(options) as landmarker:
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
 
-        # Redimensionnement et création du panneau latéral
         frame = cv2.resize(frame, (640, 480))
         h, w, _ = frame.shape
+        
+        # Création du panneau latéral
         panel = np.zeros((480, 250, 3), dtype=np.uint8)
-        cv2.putText(panel, "Signe detecte :", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        cv2.putText(panel, "SYSTEME HYBRIDE", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.line(panel, (10, 50), (240, 50), (255, 255, 255), 1)
 
-        # --- A. ANALYSE MEDIAPIPE (Le Squelette) ---
+        # --- ÉTAPE A : MEDIAPIPE CHERCHE LA MAIN ---
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-        # MediaPipe a besoin d'un chronomètre précis
         timestamp_ms = int(time.time() * 1000) 
         mp_results = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-        # --- B. ANALYSE YOLO (La Traduction) ---
-        yolo_results = model(frame, stream=True, verbose=False, conf=0.25)
+        lettre_predite = "..."
+        confiance = 0.0
 
-        signe_detecte = False
-
-        # --- C. DESSIN ET FUSION ---
-        # 1. On dessine d'abord le squelette s'il est là (Couche du bas)
         if mp_results.hand_landmarks:
-            for hand_landmarks in mp_results.hand_landmarks:
-                points_pixels = []
-                for landmark in hand_landmarks:
-                    x = int(landmark.x * w)
-                    y = int(landmark.y * h)
-                    points_pixels.append((x, y))
-                    # Points orange pour les articulations
-                    cv2.circle(frame, (x, y), 5, (0, 150, 255), -1) 
+            hand_landmarks = mp_results.hand_landmarks[0]
 
-                # Lignes blanches pour les os
-                for connexion in connexions:
-                    pt1 = points_pixels[connexion[0]]
-                    pt2 = points_pixels[connexion[1]]
-                    cv2.line(frame, pt1, pt2, (255, 255, 255), 2) 
+            # 1. On récupère toutes les coordonnées de la main
+            points_pixels = []
+            x_coords = []
+            y_coords = []
+            
+            for landmark in hand_landmarks:
+                x = int(landmark.x * w)
+                y = int(landmark.y * h)
+                points_pixels.append((x, y))
+                x_coords.append(x)
+                y_coords.append(y)
 
-        # 2. On superpose les infos de YOLO (Couche du haut)
-        for r in yolo_results:
-            boxes = r.boxes
-            if len(boxes) > 0:
-                signe_detecte = True
+            # 2. On calcule les limites de la main pour créer un recadrage (Crop)
+            marge = 40 # On ajoute 40 pixels de marge pour ne pas couper le bout des doigts
+            x1 = max(0, min(x_coords) - marge)
+            y1 = max(0, min(y_coords) - marge)
+            x2 = min(w, max(x_coords) + marge)
+            y2 = min(h, max(y_coords) + marge)
+
+            # 3. On "découpe" virtuellement l'image pour l'isoler
+            image_isolee = frame[y1:y2, x1:x2]
+
+            # --- ÉTAPE B : YOLO TRADUIT L'IMAGE ISOLÉE ---
+            # Si la découpe est valide (pas d'erreur de bordure d'écran)
+            if image_isolee.size != 0:
+                # YOLO ne regarde plus toute la pièce, il regarde JUSTE la main !
+                yolo_results = model_yolo(image_isolee, verbose=False, conf=0.25)
                 
-                box = boxes[0] 
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                conf = 0.25 # float(box.conf[0])
-                cls_id = int(box.cls[0])
-                lettre_brute = model.names[cls_id]
+                for r in yolo_results:
+                    if len(r.boxes) > 0:
+                        box = r.boxes[0] 
+                        cls_id = int(box.cls[0])
+                        confiance = float(box.conf[0])
+                        lettre_predite = model_yolo.names[cls_id]
 
-                # Stabilisateur de texte
-                historique_lettres.append(lettre_brute)
-                try:
-                    lettre_stable = mode(historique_lettres)
-                except StatisticsError:
-                    lettre_stable = lettre_brute
+            # --- ÉTAPE C : DESSIN DE L'INTERFACE ---
+            # Dessin des articulations (MediaPipe)
+            for connexion in connexions:
+                pt1 = points_pixels[connexion[0]]
+                pt2 = points_pixels[connexion[1]]
+                cv2.line(frame, pt1, pt2, (255, 255, 255), 2)
+            for pt in points_pixels:
+                cv2.circle(frame, pt, 4, (0, 150, 255), -1)
 
-                # Dessin du cadre vert de ciblage
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 100), 2)
-                cv2.putText(frame, lettre_stable, (x2 + 10, max(30, y1 + 30)), cv2.FONT_HERSHEY_DUPLEX, 1.2, (0, 255, 100), 2)
+            # Dessin de la cible et de la lettre (MediaPipe donne la position, YOLO donne la lettre)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 100), 2)
+            cv2.putText(frame, lettre_predite, (x1, max(30, y1 - 10)), cv2.FONT_HERSHEY_DUPLEX, 1.2, (0, 255, 100), 2)
 
-                # Mise à jour du panneau
-                cv2.putText(panel, f"1. {lettre_stable} ({conf:.0%})", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 100), 2)
+            # Mise à jour du panneau
+            cv2.putText(panel, f"Signe: {lettre_predite}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 100), 2)
+            cv2.putText(panel, f"Preci: {confiance:.0%}", (10, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (150, 150, 150), 1)
 
-        if not signe_detecte:
-            historique_lettres.clear()
-            lettre_stable = "..."
-            cv2.putText(panel, "Aucune main visible", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
+        else:
+            cv2.putText(panel, "Aucune main", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
-        # Assemblage de l'image finale
+        # Affichage
         fenetre_finale = cv2.hconcat([frame, panel])
-        cv2.imshow("Traducteur Langue des Signes PRO", fenetre_finale)
+        cv2.imshow("Pipeline Langue des Signes", fenetre_finale)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
 cap.release()
 cv2.destroyAllWindows()
+print("Fin de l'application.")
