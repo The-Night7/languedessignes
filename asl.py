@@ -53,7 +53,7 @@ with HandLandmarker.create_from_options(options) as landmarker:
         h, w, _ = frame.shape
         
         panel = np.zeros((480, 250, 3), dtype=np.uint8)
-        cv2.putText(panel, "TRADUCTION LSF", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        cv2.putText(panel, "TRADUCTION ASL", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
         cv2.line(panel, (10, 50), (240, 50), (255, 255, 255), 1)
 
         # --- A. MEDIAPIPE (Localisation) ---
